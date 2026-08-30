@@ -73,6 +73,16 @@ def get_theme_css(theme_name):
     c = THEMES.get(theme_name, THEMES["dark"])
     return f"""
 <style>
+    /* Theme-aware text color variables. Every scattered inline text color
+       in the app should reference these instead of a hardcoded hex value,
+       so headings/labels never go invisible when the theme is switched
+       (e.g. white text on a white light-mode card). */
+    :root {{
+        --lg-heading: {c['heading']};
+        --lg-muted: {c['muted']};
+        --lg-text: {c['text']};
+    }}
+
     /* Premium theme base */
     .stApp {{
         background-color: {c['app_bg']};
@@ -165,6 +175,42 @@ def get_theme_css(theme_name):
         letter-spacing: 0.2em;
         text-transform: uppercase;
         margin-bottom: 1.5rem;
+    }}
+
+    /* Blue uppercase section labels used inside forms (e.g. "QUANTITY & PRICE") */
+    .section-label {{
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #3B82F6;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        margin: 1.75rem 0 0.75rem 0;
+    }}
+
+    /* Secondary (outline) button variant, e.g. "Load demo product" */
+    .stButton > button[kind="secondary"] {{
+        background-color: transparent;
+        color: {c['text']};
+        border: 1px solid {c['border_strong']};
+    }}
+    .stButton > button[kind="secondary"]:hover {{
+        background-color: {c['card_bg']};
+        border-color: #10B981;
+        color: #10B981;
+    }}
+
+    /* Text-link style "Clear" button */
+    .clear-link-wrap .stButton > button {{
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: {c['muted']} !important;
+        text-decoration: underline;
+        font-weight: 500;
+        padding: 0.75rem 0.5rem;
+    }}
+    .clear-link-wrap .stButton > button:hover {{
+        color: #EF4444 !important;
     }}
 
     .hero-headline {{
@@ -684,117 +730,164 @@ def display_compliance_result(result, show_confidence=False):
     if result.get('is_imported', False):
         st.warning("⚠️ Imported product detected - Country of Origin is critical")
 
+MANUAL_FIELD_KEYS = [
+    "m_product_name", "m_category", "m_manufacturer_name", "m_manufacturer_address",
+    "m_customer_care", "m_country_of_origin", "m_fssai_license", "m_net_quantity",
+    "m_mrp", "m_unit_sale_price", "m_mfg_date", "m_expiry_date", "m_dimensions",
+    "m_batch_number", "m_qr_value", "m_dims_relevant", "m_perishable",
+]
+
+# Per-field defaults used when Clearing the form (or when a demo dict omits
+# a key). "m_category" MUST default to a valid option string, not "", since
+# it drives a selectbox — an empty string there raises a Streamlit error.
+MANUAL_FIELD_DEFAULTS = {
+    "m_category": "Food",
+    "m_dims_relevant": False,
+    "m_perishable": False,
+}
+
+
 def manual_entry_tab():
-    """Manual entry form for product details with enhanced styling"""
-    st.markdown('<div class="step-indicator">STEP 01: Enter Product Details</div>', unsafe_allow_html=True)
-    
-    # Get demo data if available
-    demo_data = st.session_state.get('demo_data', {})
-    
+    """Manual entry form for product details, styled to match the
+    Identity / Manufacturer / Quantity & Price / Dates & Optional
+    Declarations grouping."""
+
+    # IMPORTANT: apply any pending Load-Demo/Clear values BEFORE the widgets
+    # below are instantiated. Streamlit raises an error if you try to write
+    # to a widget's session_state key AFTER that widget has already been
+    # created in the same script run — so button clicks below only stash
+    # the desired values here and trigger a rerun; this block is what
+    # actually applies them, on the following run, before the widgets exist.
+    pending = st.session_state.pop("_manual_pending_apply", None)
+    if pending is not None:
+        for key in MANUAL_FIELD_KEYS:
+            st.session_state[key] = pending.get(key, MANUAL_FIELD_DEFAULTS.get(key, ""))
+
     # Info card
     st.markdown("""
     <div class='info-card'>
         <div style='display: flex; align-items: center; gap: 1rem;'>
             <div style='font-size: 2rem;'>💡</div>
             <div>
-                <div style='font-weight: 600; color: #FFFFFF;'>Manual Entry Mode</div>
-                <div style='color: #718096; font-size: 0.9rem;'>Enter product label details manually for compliance checking</div>
+                <div style='font-weight: 600; color: var(--lg-heading);'>Manual Entry Mode</div>
+                <div style='color: var(--lg-muted); font-size: 0.9rem;'>Enter product label details manually for compliance checking</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    with st.form("manual_entry_form"):
-        # Product information section
-        st.markdown("### 🏷️ Product Information")
-        st.markdown("")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            product_name = st.text_input("Product Name*", value=demo_data.get('product_name', ''), placeholder="e.g., Organic Honey")
-            category_options = ["Food", "Cosmetic", "Household", "Electronics", "Textile", "Other"]
-            demo_category = demo_data.get('category', 'Food')
-            default_category_index = category_options.index(demo_category) if demo_category in category_options else 0
-            category = st.selectbox("Category*", category_options, index=default_category_index)
-        
-        with col2:
-            manufacturer_name = st.text_input("Manufacturer Name*", value=demo_data.get('manufacturer_name', ''), placeholder="e.g., Organic Foods Ltd")
-            batch_number = st.text_input("Batch Number", value=demo_data.get('batch_number', ''), placeholder="e.g., BATCH12345")
-        
+
+    # Plain widgets (not st.form) so we can have three independent bottom
+    # buttons — "Load demo product", "Clear" and "Run compliance check"
+    # — Streamlit forms only allow a single submit button.
+
+    st.markdown('<div class="section-label">Identity</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        product_name = st.text_input("Product name", key="m_product_name", placeholder="e.g. Organic Basmati Rice")
+    with col2:
+        category_options = ["Food", "Cosmetic", "Household", "Electronics", "Textile", "Other"]
+        current_category = st.session_state.get("m_category", "Food")
+        default_index = category_options.index(current_category) if current_category in category_options else 0
+        category = st.selectbox("Category", category_options, index=default_index, key="m_category")
+
+    st.markdown('<div class="section-label">Manufacturer / Importer</div>', unsafe_allow_html=True)
+    col3, col4 = st.columns(2)
+    with col3:
+        manufacturer_name = st.text_input("Manufacturer name", key="m_manufacturer_name", placeholder="e.g. Organic Foods Pvt Ltd")
+        manufacturer_address = st.text_area("Manufacturer address", key="m_manufacturer_address", placeholder="Full address with city, state, PIN", height=90)
+    with col4:
+        customer_care = st.text_input("Customer care number", key="m_customer_care", placeholder="e.g. 1800-123-4567")
+        country_of_origin = st.text_input("Country of origin", key="m_country_of_origin", placeholder="e.g. India")
+        fssai_license = st.text_input(
+            "FSSAI license number", key="m_fssai_license",
+            placeholder="e.g. 10012345678901 (14-digit)",
+            help="Required for Food category"
+        )
+
+    st.markdown('<div class="section-label">Quantity & Price</div>', unsafe_allow_html=True)
+    col5, col6, col7 = st.columns(3)
+    with col5:
+        net_quantity = st.text_input("Net quantity", key="m_net_quantity", placeholder="e.g. 1 kg")
+    with col6:
+        mrp = st.text_input("MRP (₹)", key="m_mrp", placeholder="e.g. 250")
+    with col7:
+        unit_sale_price = st.text_input("Unit sale price", key="m_unit_sale_price", placeholder="e.g. ₹250/kg")
+
+    st.markdown('<div class="section-label">Dates & Optional Declarations</div>', unsafe_allow_html=True)
+    col8, col9, col10 = st.columns(3)
+    with col8:
+        mfg_date = st.text_input("Manufacture / pack date", key="m_mfg_date", placeholder="e.g. 01/2026")
+    with col9:
+        expiry_date = st.text_input("Best before / use by", key="m_expiry_date", placeholder="e.g. 12 months")
+    with col10:
+        dimensions = st.text_input("Dimensions (if relevant)", key="m_dimensions", placeholder="e.g. 20 cm x 10 cm")
+
+    col11, col12 = st.columns(2)
+    with col11:
+        batch_number = st.text_input("Batch / lot no.", key="m_batch_number", placeholder="Optional")
+    with col12:
+        qr_value = st.text_input("QR / barcode value", key="m_qr_value", placeholder="Optional")
+
+    dims_relevant = st.checkbox("Dimensions are relevant to this commodity", key="m_dims_relevant")
+    perishable = st.checkbox("Commodity may become unfit for human consumption", key="m_perishable")
+
+    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+
+    btn_col1, btn_col2, btn_col3 = st.columns([1.3, 1, 1.6])
+    with btn_col1:
+        load_demo_clicked = st.button("Load demo product", key="m_load_demo_btn", use_container_width=True, type="secondary")
+    with btn_col2:
+        st.markdown("<div class='clear-link-wrap'>", unsafe_allow_html=True)
+        clear_clicked = st.button("Clear", key="m_clear_btn", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with btn_col3:
+        run_check_clicked = st.button("Run compliance check →", key="m_run_check_btn", use_container_width=True, type="primary")
+
+    if load_demo_clicked:
+        st.session_state["_manual_pending_apply"] = load_demo_product()
+        st.rerun()
+
+    if clear_clicked:
+        st.session_state["_manual_pending_apply"] = {}
+        st.rerun()
+
+    if run_check_clicked:
+        # Validate FSSAI for Food category
+        if category == "Food" and not fssai_license:
+            st.error("❌ FSSAI License Number is required for Food products")
+            return
+
+        # Validate perishable declaration requires an expiry/best-before date
+        if perishable and not expiry_date:
+            st.error("❌ This commodity is marked as perishable — a Best Before / Use By date is required")
+            return
+
+        # Validate dimensions when marked relevant
+        if dims_relevant and not dimensions:
+            st.error("❌ Dimensions are marked as relevant but no value was entered")
+            return
+
+        # Combine all text for compliance checking with proper field labels
+        all_text = (
+            f"{product_name} {manufacturer_name} {manufacturer_address} "
+            f"Net Weight: {net_quantity} MRP: {mrp} Unit Sale Price: {unit_sale_price} "
+            f"MFG: {mfg_date} Expiry Date: {expiry_date} Customer Care: {customer_care} "
+            f"Country of Origin: {country_of_origin} {batch_number}"
+        )
+        if fssai_license:
+            all_text += f" FSSAI License: {fssai_license}"
+        if dims_relevant and dimensions:
+            all_text += f" Dimensions: {dimensions}"
+        if qr_value:
+            all_text += f" QR: {qr_value}"
+
+        result = check_compliance(all_text, category)
+
         st.markdown("---")
-        
-        # Address and contact section
-        st.markdown("### 📍 Address & Contact")
-        st.markdown("")
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            manufacturer_address = st.text_area("Manufacturer Address*", value=demo_data.get('manufacturer_address', ''), placeholder="Full address with city, state, country", height=100)
-            customer_care = st.text_input("Customer Care Number*", value=demo_data.get('customer_care', ''), placeholder="e.g., 1800-123-4567")
-        
-        with col4:
-            country_of_origin = st.text_input("Country of Origin*", value=demo_data.get('country_of_origin', ''), placeholder="e.g., India")
-            fssai_license = st.text_input("FSSAI License Number", value=demo_data.get('fssai_license', ''), placeholder="e.g., 10012345678901 (14-digit number)", help="Required for Food products")
-        
-        st.markdown("---")
-        
-        # Pricing and quantity section
-        st.markdown("### 💰 Pricing & Quantity")
-        st.markdown("")
-        col5, col6 = st.columns(2)
-        
-        with col5:
-            net_quantity = st.text_input("Net Quantity*", value=demo_data.get('net_quantity', ''), placeholder="e.g., 500g, 1L")
-            mrp = st.text_input("MRP (Maximum Retail Price)*", value=demo_data.get('mrp', ''), placeholder="e.g., ₹299")
-        
-        with col6:
-            unit_sale_price = st.text_input("Unit Sale Price*", value=demo_data.get('unit_sale_price', ''), placeholder="e.g., ₹299")
-        
-        st.markdown("---")
-        
-        # Dates section
-        st.markdown("### 📅 Important Dates")
-        st.markdown("")
-        col7, col8 = st.columns(2)
-        
-        with col7:
-            mfg_date = st.text_input("Manufacturing Date*", value=demo_data.get('mfg_date', ''), placeholder="e.g., 01/01/2024")
-        
-        with col8:
-            expiry_date = st.text_input("Expiry/Best Before Date*", value=demo_data.get('expiry_date', ''), placeholder="e.g., 01/01/2026")
-        
-        st.markdown("---")
-        
-        # Submit button with better styling
-        col_left, col_center, col_right = st.columns([1, 2, 1])
-        with col_center:
-            submitted = st.form_submit_button("🔍 Check Compliance", use_container_width=True, type="primary")
-        
-        if submitted:
-            # Clear demo data after use
-            if 'demo_data' in st.session_state:
-                del st.session_state.demo_data
-            
-            # Validate FSSAI for Food category
-            if category == "Food" and not fssai_license:
-                st.error("❌ FSSAI License Number is required for Food products")
-                return
-            
-            # Combine all text for compliance checking with proper field labels
-            all_text = f"{product_name} {manufacturer_name} {manufacturer_address} Net Weight: {net_quantity} MRP: {mrp} Unit Sale Price: {unit_sale_price} MFG: {mfg_date} Expiry Date: {expiry_date} Customer Care: {customer_care} Country of Origin: {country_of_origin} {batch_number}"
-            
-            # Add FSSAI license if provided
-            if fssai_license:
-                all_text += f" FSSAI License: {fssai_license}"
-            
-            result = check_compliance(all_text, category)
-            
-            st.markdown("---")
-            st.markdown('<div class="step-indicator">STEP 02: Compliance Results</div>', unsafe_allow_html=True)
-            display_compliance_result(result)
-            
-            # Add to history
-            add_to_history(result, method="Manual", product_name=product_name or "Unknown")
+        st.markdown('<div class="step-indicator">Compliance Results</div>', unsafe_allow_html=True)
+        display_compliance_result(result)
+
+        add_to_history(result, method="Manual", product_name=product_name or "Unknown")
 
 def camera_access_note():
     """Note about browser permission and HTTPS for st.camera_input."""
@@ -804,7 +897,7 @@ def camera_access_note():
             <div style='font-size: 1.5rem;'>📷</div>
             <div>
                 <div style='font-weight: 600; color: #10B981;'>Camera access</div>
-                <div style='color: #9CA3AF; font-size: 0.85rem;'>Allow camera permission in the browser. This works on localhost in most modern browsers and works fully over HTTPS when deployed (for example Streamlit Cloud).</div>
+                <div style='color: var(--lg-muted); font-size: 0.85rem;'>Allow camera permission in the browser. This works on localhost in most modern browsers and works fully over HTTPS when deployed (for example Streamlit Cloud).</div>
             </div>
         </div>
     </div>
@@ -888,8 +981,8 @@ def photo_ocr_tab():
                 <div style='display: flex; align-items: center; gap: 1rem;'>
                     <div style='font-size: 2rem;'>⚡</div>
                     <div>
-                        <div style='font-weight: 600; color: #FFFFFF;'>Fast Mode (Offline)</div>
-                        <div style='color: #718096; font-size: 0.85rem;'>Instant results • Works offline • Manual review needed</div>
+                        <div style='font-weight: 600; color: var(--lg-heading);'>Fast Mode (Offline)</div>
+                        <div style='color: var(--lg-muted); font-size: 0.85rem;'>Instant results • Works offline • Manual review needed</div>
                     </div>
                 </div>
             </div>
@@ -903,8 +996,8 @@ def photo_ocr_tab():
                     <div style='display: flex; align-items: center; gap: 1rem;'>
                         <div style='font-size: 2rem;'>🤖</div>
                         <div>
-                            <div style='font-weight: 600; color: #FFFFFF;'>Accurate Mode (Online)</div>
-                            <div style='color: #718096; font-size: 0.85rem;'>AI-powered • Higher accuracy • Fully automatic</div>
+                            <div style='font-weight: 600; color: var(--lg-heading);'>Accurate Mode (Online)</div>
+                            <div style='color: var(--lg-muted); font-size: 0.85rem;'>AI-powered • Higher accuracy • Fully automatic</div>
                         </div>
                     </div>
                 </div>
@@ -916,8 +1009,8 @@ def photo_ocr_tab():
                     <div style='display: flex; align-items: center; gap: 1rem;'>
                         <div style='font-size: 2rem;'>🔒</div>
                         <div>
-                            <div style='font-weight: 600; color: #FFFFFF;'>Accurate Mode (Locked)</div>
-                            <div style='color: #718096; font-size: 0.85rem;'>Install google-generativeai to enable</div>
+                            <div style='font-weight: 600; color: var(--lg-heading);'>Accurate Mode (Locked)</div>
+                            <div style='color: var(--lg-muted); font-size: 0.85rem;'>Install google-generativeai to enable</div>
                         </div>
                     </div>
                 </div>
@@ -958,7 +1051,7 @@ def photo_ocr_tab():
         preview_title = "Captured Product Label" if image_source == "Take Photo" else "Uploaded Product Label"
         st.markdown(f"""
         <div class='info-card'>
-            <div style='font-weight: 600; color: #FFFFFF; margin-bottom: 0.5rem;'>📸 {preview_title}</div>
+            <div style='font-weight: 600; color: var(--lg-heading); margin-bottom: 0.5rem;'>📸 {preview_title}</div>
         </div>
         """, unsafe_allow_html=True)
         img_col_left, img_col_center, img_col_right = st.columns([1, 2, 1])
@@ -985,8 +1078,8 @@ def photo_ocr_tab():
                             
                             st.markdown("""
                             <div class='info-card'>
-                                <div style='font-weight: 600; color: #FFFFFF; margin-bottom: 0.5rem;'>✏️ Review and Edit OCR Results</div>
-                                <div style='color: #718096; font-size: 0.85rem;'>Edit the extracted text if needed before checking compliance</div>
+                                <div style='font-weight: 600; color: var(--lg-heading); margin-bottom: 0.5rem;'>✏️ Review and Edit OCR Results</div>
+                                <div style='color: var(--lg-muted); font-size: 0.85rem;'>Edit the extracted text if needed before checking compliance</div>
                             </div>
                             """, unsafe_allow_html=True)
                             
@@ -1106,8 +1199,8 @@ def qr_scanner_tab():
             <div style='display: flex; align-items: center; gap: 1rem;'>
                 <div style='font-size: 2rem;'>📷</div>
                 <div>
-                    <div style='font-weight: 600; color: #FFFFFF;'>Take Photo of QR Code</div>
-                    <div style='color: #9CA3AF; font-size: 0.9rem;'>Capture a still photo of a QR code with your camera</div>
+                    <div style='font-weight: 600; color: var(--lg-heading);'>Take Photo of QR Code</div>
+                    <div style='color: var(--lg-muted); font-size: 0.9rem;'>Capture a still photo of a QR code with your camera</div>
                 </div>
             </div>
         </div>
@@ -1138,7 +1231,7 @@ def bulk_scan_tab():
     
     st.markdown("""
     <div class='info-card'>
-        <div style='color: #9CA3AF; font-size: 0.9rem;'>For single quick scans, use Photo/OCR tab's Take Photo option</div>
+        <div style='color: var(--lg-muted); font-size: 0.9rem;'>For single quick scans, use Photo/OCR tab's Take Photo option</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1238,8 +1331,8 @@ def analytics_dashboard_tab():
         st.markdown("""
         <div class='info-card' style='text-align: center; padding: 2rem;'>
             <div style='font-size: 3rem; margin-bottom: 1rem;'>📭</div>
-            <div style='font-weight: 600; color: #FFFFFF; margin-bottom: 0.5rem;'>No Scan History Available</div>
-            <div style='color: #718096; font-size: 0.9rem;'>Start scanning products to see analytics and insights</div>
+            <div style='font-weight: 600; color: var(--lg-heading); margin-bottom: 0.5rem;'>No Scan History Available</div>
+            <div style='color: var(--lg-muted); font-size: 0.9rem;'>Start scanning products to see analytics and insights</div>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -1353,7 +1446,7 @@ def analytics_dashboard_tab():
         <div class='info-card' style='text-align: center;'>
             <div style='font-size: 2rem; margin-bottom: 0.5rem;'>🎉</div>
             <div style='font-weight: 600; color: #10B981;'>Excellent!</div>
-            <div style='color: #9CA3AF; font-size: 0.9rem;'>No missing fields in recent scans</div>
+            <div style='color: var(--lg-muted); font-size: 0.9rem;'>No missing fields in recent scans</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1367,8 +1460,8 @@ def sidebar_history():
                 <path d='M11 16 L14.5 19.5 L21 12' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' fill='none'/>
             </svg>
         </div>
-        <div style='font-weight: 700; color: #FFFFFF; font-size: 1.1rem;'>LabelGuard <span style='color: #10B981;'>AI</span></div>
-        <div style='color: #9CA3AF; font-size: 0.7rem; margin-top: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase;'>Compliance Scanner</div>
+        <div style='font-weight: 700; color: var(--lg-heading); font-size: 1.1rem;'>LabelGuard <span style='color: #10B981;'>AI</span></div>
+        <div style='color: var(--lg-muted); font-size: 0.7rem; margin-top: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase;'>Compliance Scanner</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1376,14 +1469,14 @@ def sidebar_history():
     
     # Quick links
     st.sidebar.markdown("""
-    <div style='color: #FFFFFF; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;'>
+    <div style='color: var(--lg-heading); font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;'>
         Quick Links
     </div>
     """, unsafe_allow_html=True)
     
     # Add quick navigation links
     st.sidebar.markdown("""
-    <div style='color: #9CA3AF; font-size: 0.85rem; line-height: 1.6;'>
+    <div style='color: var(--lg-muted); font-size: 0.85rem; line-height: 1.6;'>
         <div style='margin-bottom: 0.5rem;'>• Manual Entry</div>
         <div style='margin-bottom: 0.5rem;'>• Photo/OCR Scan</div>
         <div style='margin-bottom: 0.5rem;'>• Analytics Dashboard</div>
@@ -1391,32 +1484,43 @@ def sidebar_history():
     </div>
     """, unsafe_allow_html=True)
 
-def scan_history_tab():
-    """New dedicated tab for scan history with full-width layout"""
-    st.markdown('<div class="step-indicator">Scan History</div>', unsafe_allow_html=True)
-    
+def scan_history_section():
+    """Full-width Scan History section shown below the tabs (not inside a
+    tab), matching the reference layout: title + subtitle on the left,
+    a 'Clear history' link on the right, and either an empty-state box
+    or the scan table."""
+    header_col, clear_col = st.columns([4, 1])
+    with header_col:
+        st.markdown("""
+        <div style='font-size: 1.5rem; font-weight: 700; color: var(--lg-heading);'>Scan history</div>
+        <div style='color: var(--lg-muted); font-size: 0.9rem; margin-top: 0.25rem;'>Saved locally on this device.</div>
+        """, unsafe_allow_html=True)
+    with clear_col:
+        st.markdown("<div style='margin-top: 1.6rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='clear-link-wrap' style='text-align: right;'>", unsafe_allow_html=True)
+        if st.session_state.scan_history:
+            if st.button("Clear history", key="clear_history_btn"):
+                st.session_state.scan_history = []
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
     if not st.session_state.scan_history:
         st.markdown("""
-        <div class='info-card' style='text-align: center; padding: 3rem;'>
-            <div style='font-size: 3rem; margin-bottom: 1rem;'>📭</div>
-            <div style='font-weight: 600; color: #FFFFFF; margin-bottom: 0.5rem;'>No Scan History</div>
-            <div style='color: #9CA3AF; font-size: 0.9rem;'>Start scanning products to see your compliance history</div>
+        <div style='text-align: center; padding: 2.5rem; border: 1px dashed var(--lg-muted);
+                    border-radius: 12px; margin-top: 1rem;'>
+            <div style='color: var(--lg-muted); font-size: 0.95rem;'>No saved scans yet.</div>
         </div>
         """, unsafe_allow_html=True)
         return
-    
-    # Convert history to DataFrame
+
     df = pd.DataFrame(st.session_state.scan_history)
-    
-    # Summary statistics with premium styling
-    st.markdown("### 📈 Overview")
-    col1, col2, col3, col4 = st.columns(4)
-    
+
     total_scans = len(df)
     compliant_count = sum(df['compliant'])
     non_compliant_count = total_scans - compliant_count
     compliance_rate = (compliant_count / total_scans * 100) if total_scans > 0 else 0
-    
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Scans", total_scans)
     with col2:
@@ -1425,46 +1529,36 @@ def scan_history_tab():
         st.metric("Non-Compliant", non_compliant_count)
     with col4:
         st.metric("Compliance Rate", f"{compliance_rate:.1f}%")
-    
-    st.markdown("---")
-    
-    # Detailed history table
-    st.markdown("### 📋 Scan History")
-    
-    # Create a clean dataframe for display
+
     display_df = df.copy()
     display_df['status'] = display_df['compliant'].apply(lambda x: '✅ Compliant' if x else '❌ Non-Compliant')
     display_df = display_df[['timestamp', 'product_name', 'method', 'status', 'score']]
     display_df.columns = ['Timestamp', 'Product', 'Method', 'Status', 'Score']
-    
+
     st.dataframe(display_df, use_container_width=True, hide_index=True)
-    
-    # Clear history button
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-    with col_center:
-        if st.button("🗑️ Clear All History", use_container_width=True):
-            st.session_state.scan_history = []
-            st.success("✅ History cleared!")
-            st.rerun()
 
 def load_demo_product():
-    """Load demo product data for testing - FULLY COMPLIANT PRODUCT"""
-    demo_data = {
-        'product_name': 'Organic Basmati Rice',
-        'category': 'Food',
-        'manufacturer_name': 'Organic Foods Pvt Ltd',
-        'manufacturer_address': 'F-123, Industrial Area, Phase 2, New Delhi - 110020, India',
-        'net_quantity': '1 kg',
-        'mrp': 'Rs.250',
-        'unit_sale_price': 'Rs.250/kg',
-        'mfg_date': '15/01/2024',
-        'expiry_date': '15/01/2026',
-        'customer_care': '1800-123-4567',
-        'country_of_origin': 'India',
-        'batch_number': 'BATCH12345',
-        'fssai_license': '10012345678901'
+    """Demo product data for testing - a FULLY COMPLIANT product, keyed to
+    match the manual-entry widget session_state keys (m_*)."""
+    return {
+        'm_product_name': 'Organic Basmati Rice',
+        'm_category': 'Food',
+        'm_manufacturer_name': 'Organic Foods Pvt Ltd',
+        'm_manufacturer_address': 'F-123, Industrial Area, Phase 2, New Delhi - 110020, India',
+        'm_net_quantity': '1 kg',
+        'm_mrp': 'Rs.250',
+        'm_unit_sale_price': 'Rs.250/kg',
+        'm_mfg_date': '15/01/2024',
+        'm_expiry_date': '15/01/2026',
+        'm_customer_care': '1800-123-4567',
+        'm_country_of_origin': 'India',
+        'm_batch_number': 'BATCH12345',
+        'm_fssai_license': '10012345678901',
+        'm_dimensions': '20 cm x 10 cm',
+        'm_qr_value': 'BATCH12345-2026',
+        'm_dims_relevant': False,
+        'm_perishable': True,
     }
-    return demo_data
 
 # Main application
 def main():
@@ -1607,49 +1701,25 @@ def main():
     # Sidebar with history
     sidebar_history()
     
-    # Main tabs with Scan History added
+    # Main tabs (Scan History is now a full-width section below the tabs,
+    # not a tab, to match the reference layout)
     if QR_AVAILABLE:
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "Manual Entry", 
             "Photo/OCR", 
             "QR Scanner", 
             "Bulk Scan", 
             "Analytics Dashboard",
-            "Scan History"
         ])
     else:
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4 = st.tabs([
             "Manual Entry", 
             "Photo/OCR", 
             "Bulk Scan", 
             "Analytics Dashboard",
-            "Scan History"
         ])
     
     with tab1:
-        # Load Demo Product button with better styling
-        col_left, col_center, col_right = st.columns([1, 2, 1])
-        with col_center:
-            if st.button("🎯 Load Demo Product", use_container_width=True):
-                demo_data = load_demo_product()
-                st.session_state.demo_data = demo_data
-                st.success("✅ Demo product loaded! Fill in the form with the pre-loaded data.")
-                st.rerun()
-        
-        # Pre-fill form if demo data is loaded
-        if 'demo_data' in st.session_state:
-            st.markdown("""
-            <div class='info-card' style='background: linear-gradient(90deg, #84fab0 0%, #8fd3f4 100%);'>
-                <div style='display: flex; align-items: center; gap: 1rem;'>
-                    <div style='font-size: 2rem;'>✅</div>
-                    <div>
-                        <div style='font-weight: 600; color: #155724;'>Demo data loaded!</div>
-                        <div style='color: #155724; font-size: 0.9rem;'>Form fields are pre-filled with sample compliant product data</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
         manual_entry_tab()
     
     with tab2:
@@ -1662,15 +1732,14 @@ def main():
             bulk_scan_tab()
         with tab5:
             analytics_dashboard_tab()
-        with tab6:
-            scan_history_tab()
     else:
         with tab3:
             bulk_scan_tab()
         with tab4:
             analytics_dashboard_tab()
-        with tab5:
-            scan_history_tab()
+    
+    st.markdown("---")
+    scan_history_section()
     
     # Footer disclaimer
     st.markdown("---")

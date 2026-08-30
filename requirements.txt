@@ -1,0 +1,11 @@
+easyocr
+opencv-python
+streamlit
+numpy
+pillow
+google-generativeai
+python-dotenv
+qrcode
+pyzbar
+matplotlib
+seaborn

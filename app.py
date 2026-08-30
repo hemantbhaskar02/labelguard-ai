@@ -849,7 +849,7 @@ def process_qr_image_file(image_file, method, preview_caption, data_key, categor
     """Decode a QR image (upload or camera) and run the shared compliance checklist."""
     try:
         image = Image.open(image_file)
-        st.image(image, caption=preview_caption, use_container_width=True)
+        st.image(image, caption=preview_caption, width=450)
         decoded_objects = pyzbar.decode(image)
         if not decoded_objects:
             st.error("❌ No QR code detected in the image. Please try a clearer image.")
@@ -961,7 +961,9 @@ def photo_ocr_tab():
             <div style='font-weight: 600; color: #FFFFFF; margin-bottom: 0.5rem;'>📸 {preview_title}</div>
         </div>
         """, unsafe_allow_html=True)
-        st.image(image, use_container_width=True)
+        img_col_left, img_col_center, img_col_right = st.columns([1, 2, 1])
+        with img_col_center:
+            st.image(image, width=450)
         
         # Save uploaded or captured file temporarily
         temp_path = os.path.join("temp_image.jpg")

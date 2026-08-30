@@ -35,6 +35,15 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+# Hide Streamlit's default UI elements
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
 # Page configuration
 st.set_page_config(
     page_title="LabelGuard AI - Compliance Scanner",
@@ -43,34 +52,52 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for premium dark theme styling with new header/hero design
-st.markdown("""
+# Theme colors for dark and light modes
+THEMES = {
+    "dark": {
+        "app_bg": "#0F1117", "card_bg": "#1A1D27", "text": "#E2E8F0",
+        "heading": "#FFFFFF", "muted": "#9CA3AF", "muted2": "#6B7280",
+        "border": "rgba(255, 255, 255, 0.08)", "border_strong": "rgba(255, 255, 255, 0.15)",
+        "shadow": "rgba(0, 0, 0, 0.2)", "input_bg": "#1A1D27",
+    },
+    "light": {
+        "app_bg": "#F7F8FA", "card_bg": "#FFFFFF", "text": "#1F2937",
+        "heading": "#0F1117", "muted": "#4B5563", "muted2": "#6B7280",
+        "border": "rgba(15, 17, 23, 0.08)", "border_strong": "rgba(15, 17, 23, 0.15)",
+        "shadow": "rgba(15, 17, 23, 0.08)", "input_bg": "#F7F8FA",
+    },
+}
+
+def get_theme_css(theme_name):
+    """Return the full <style> block for the given theme ('dark' or 'light')."""
+    c = THEMES.get(theme_name, THEMES["dark"])
+    return f"""
 <style>
-    /* Premium dark theme base */
-    .stApp {
-        background-color: #0F1117;
-        color: #E2E8F0;
-    }
-    
+    /* Premium theme base */
+    .stApp {{
+        background-color: {c['app_bg']};
+        color: {c['text']};
+    }}
+
     /* Main container styling */
-    .main .block-container {
+    .main .block-container {{
         padding-top: 2rem;
         padding-bottom: 3rem;
         max-width: 1400px;
-        background-color: #0F1117;
-    }
-    
+        background-color: {c['app_bg']};
+    }}
+
     /* Custom Header/Navbar */
-    .custom-header {
+    .custom-header {{
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 1.5rem 0;
         margin-bottom: 2rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    
-    .logo-badge {
+        border-bottom: 1px solid {c['border']};
+    }}
+
+    .logo-badge {{
         width: 56px;
         height: 56px;
         background: linear-gradient(135deg, #10B981 0%, #0F6B3F 100%);
@@ -79,76 +106,86 @@ st.markdown("""
         align-items: center;
         justify-content: center;
         border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-    
-    .logo-text {
+    }}
+
+    .logo-text {{
         font-size: 1.25rem;
         font-weight: 700;
-        color: #FFFFFF;
+        color: {c['heading']};
         letter-spacing: -0.02em;
-    }
-    
-    .app-name {
+    }}
+
+    .app-name {{
         font-size: 1.5rem;
         font-weight: 700;
-        color: #FFFFFF;
+        color: {c['heading']};
         letter-spacing: -0.02em;
-    }
-    
-    .app-subtitle {
+    }}
+
+    .app-subtitle {{
         font-size: 0.7rem;
         font-weight: 600;
-        color: #6B7280;
+        color: {c['muted2']};
         letter-spacing: 0.2em;
         text-transform: uppercase;
         margin-top: 0.25rem;
-    }
-    
-    .theme-toggle {
+    }}
+
+    .theme-toggle {{
         font-size: 1.5rem;
-        color: #9CA3AF;
+        color: {c['muted']};
         cursor: pointer;
         transition: color 0.2s ease;
-    }
-    
-    .theme-toggle:hover {
-        color: #FFFFFF;
-    }
-    
+    }}
+
+    .theme-toggle:hover {{
+        color: {c['heading']};
+    }}
+
+    /* Make the theme toggle button blend in like an icon button */
+    div[data-testid="column"]:has(button[kind="secondary"]) button {{
+        background-color: transparent !important;
+        border: 1px solid {c['border']} !important;
+        color: {c['heading']} !important;
+        box-shadow: none !important;
+        font-size: 1.1rem !important;
+        padding: 0.5rem 0.9rem !important;
+    }}
+
     /* Hero Section */
-    .hero-section {
+    .hero-section {{
         padding: 3rem 0;
         margin-bottom: 3rem;
-    }
-    
-    .hero-tag {
+    }}
+
+    .hero-tag {{
         font-size: 0.75rem;
         font-weight: 700;
         color: #10B981;
         letter-spacing: 0.2em;
         text-transform: uppercase;
         margin-bottom: 1.5rem;
-    }
-    
-    .hero-headline {
+    }}
+
+    .hero-headline {{
         font-size: 3.5rem;
         font-weight: 800;
-        color: #FFFFFF;
+        color: {c['heading']};
         line-height: 1.1;
         letter-spacing: -0.03em;
         margin-bottom: 1.5rem;
         max-width: 900px;
-    }
-    
-    .hero-description {
+    }}
+
+    .hero-description {{
         font-size: 1.125rem;
-        color: #9CA3AF;
+        color: {c['muted']};
         line-height: 1.6;
         max-width: 700px;
         margin-bottom: 2rem;
-    }
-    
-    .hero-badge {
+    }}
+
+    .hero-badge {{
         display: inline-flex;
         align-items: center;
         padding: 0.5rem 1rem;
@@ -158,52 +195,53 @@ st.markdown("""
         font-size: 0.875rem;
         font-weight: 600;
         color: #10B981;
-    }
-    
-    .badge-dot {
+    }}
+
+    .badge-dot {{
         width: 8px;
         height: 8px;
         background-color: #10B981;
         border-radius: 50%;
         margin-right: 0.5rem;
-    }
-    
+    }}
+
     /* Stat Cards */
-    .stat-card {
-        background-color: #1A1D27;
+    .stat-card {{
+        background-color: {c['card_bg']};
         padding: 2rem;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid {c['border']};
         text-align: center;
         transition: all 0.2s ease;
-    }
-    
-    .stat-card:hover {
-        border-color: rgba(16, 185, 129, 0.2);
-    }
-    
-    .stat-label {
+        box-shadow: 0 1px 3px {c['shadow']};
+    }}
+
+    .stat-card:hover {{
+        border-color: rgba(16, 185, 129, 0.3);
+    }}
+
+    .stat-label {{
         font-size: 0.875rem;
         font-weight: 500;
-        color: #6B7280;
+        color: {c['muted2']};
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 0.75rem;
-    }
-    
-    .stat-value {
+    }}
+
+    .stat-value {{
         font-size: 2.5rem;
         font-weight: 800;
-        color: #FFFFFF;
+        color: {c['heading']};
         line-height: 1;
-    }
-    
+    }}
+
     /* Minimal Feature Cards */
-    .feature-card {
-        background-color: #1A1D27;
+    .feature-card {{
+        background-color: {c['card_bg']};
         padding: 2rem;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid {c['border']};
         text-align: center;
         transition: all 0.2s ease;
         min-height: 160px;
@@ -211,48 +249,49 @@ st.markdown("""
         flex-direction: column;
         justify-content: center;
         align-items: center;
-    }
-    
-    .feature-card:hover {
-        border-color: rgba(16, 185, 129, 0.2);
+        box-shadow: 0 1px 3px {c['shadow']};
+    }}
+
+    .feature-card:hover {{
+        border-color: rgba(16, 185, 129, 0.3);
         transform: translateY(-2px);
-    }
-    
-    .feature-icon {
+    }}
+
+    .feature-icon {{
         font-size: 2rem;
         margin-bottom: 1rem;
-    }
-    
-    .feature-title {
+    }}
+
+    .feature-title {{
         font-size: 1rem;
         font-weight: 600;
-        color: #FFFFFF;
+        color: {c['heading']};
         margin-bottom: 0.5rem;
-    }
-    
-    .feature-description {
+    }}
+
+    .feature-description {{
         font-size: 0.875rem;
-        color: #6B7280;
-    }
-    
+        color: {c['muted2']};
+    }}
+
     /* Header styling - minimal */
-    .main-header {
+    .main-header {{
         font-size: 2rem;
         font-weight: 700;
-        color: #FFFFFF;
+        color: {c['heading']};
         margin-bottom: 0.5rem;
         letter-spacing: -0.02em;
-    }
-    
-    .sub-header {
+    }}
+
+    .sub-header {{
         font-size: 1rem;
-        color: #9CA3AF;
+        color: {c['muted']};
         margin-bottom: 2rem;
         font-weight: 400;
-    }
-    
+    }}
+
     /* Compliance score card - clean, minimal */
-    .compliance-score {
+    .compliance-score {{
         font-size: 3rem;
         font-weight: 700;
         text-align: center;
@@ -260,88 +299,88 @@ st.markdown("""
         border-radius: 12px;
         margin: 1.5rem 0;
         transition: all 0.2s ease;
-    }
-    
-    .compliant {
-        background-color: #1A1D27;
+    }}
+
+    .compliant {{
+        background-color: {c['card_bg']};
         color: #10B981;
-        border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-    
-    .non-compliant {
-        background-color: #1A1D27;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+    }}
+
+    .non-compliant {{
+        background-color: {c['card_bg']};
         color: #EF4444;
-        border: 1px solid rgba(239, 68, 68, 0.2);
-    }
-    
+        border: 1px solid rgba(239, 68, 68, 0.25);
+    }}
+
     /* Field check items - clean cards */
-    .field-check {
+    .field-check {{
         font-size: 1rem;
         padding: 1rem;
         margin: 0.5rem 0;
         border-radius: 8px;
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         transition: all 0.2s ease;
-    }
-    
-    .field-found {
+    }}
+
+    .field-found {{
         border-left: 3px solid #10B981;
         color: #10B981;
-    }
-    
-    .field-missing {
+    }}
+
+    .field-missing {{
         border-left: 3px solid #EF4444;
         color: #EF4444;
-    }
-    
+    }}
+
     /* Step indicators - clean, minimal */
-    .step-indicator {
+    .step-indicator {{
         font-size: 1.25rem;
         font-weight: 600;
-        color: #FFFFFF;
+        color: {c['heading']};
         margin-bottom: 2rem;
         padding: 1rem;
-        background-color: #1A1D27;
+        background-color: {c['card_bg']};
         border-left: 3px solid #10B981;
         border-radius: 4px;
-    }
-    
+    }}
+
     /* Mode descriptions - subtle cards */
-    .mode-description {
+    .mode-description {{
         font-size: 0.95rem;
-        color: #9CA3AF;
+        color: {c['muted']};
         margin-bottom: 2rem;
         padding: 1.5rem;
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 8px;
-    }
-    
+    }}
+
     /* Disclaimer */
-    .disclaimer {
+    .disclaimer {{
         font-size: 0.85rem;
-        color: #6B7280;
+        color: {c['muted2']};
         text-align: center;
         margin-top: 4rem;
         padding: 1.5rem;
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 8px;
-    }
-    
-    /* Card styling - premium dark cards */
-    .info-card {
-        background-color: #1A1D27;
+    }}
+
+    /* Card styling - premium cards */
+    .info-card {{
+        background-color: {c['card_bg']};
         padding: 2rem;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid {c['border']};
         margin-bottom: 1rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-    
+        box-shadow: 0 2px 8px {c['shadow']};
+    }}
+
     /* Button styling - emerald accent */
-    .stButton > button {
+    .stButton > button {{
         background-color: #10B981;
         color: #FFFFFF;
         border: none;
@@ -350,198 +389,209 @@ st.markdown("""
         font-weight: 600;
         transition: all 0.2s ease;
         box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
-    }
-    
-    .stButton > button:hover {
+    }}
+
+    .stButton > button:hover {{
         background-color: #059669;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    }
-    
-    .stButton > button[kind="primary"] {
+    }}
+
+    .stButton > button[kind="primary"] {{
         background-color: #10B981;
-    }
-    
+    }}
+
     /* Input styling - clean, minimal */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea,
-    .stSelectbox > div > div > select {
+    .stSelectbox > div > div > select {{
         border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        background-color: #1A1D27;
-        color: #E2E8F0;
+        border: 1px solid {c['border_strong']};
+        background-color: {c['input_bg']};
+        color: {c['text']};
         transition: all 0.2s ease;
-    }
-    
+    }}
+
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus,
-    .stSelectbox > div > div > select:focus {
+    .stSelectbox > div > div > select:focus {{
         border-color: #10B981;
         box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
         outline: none;
-    }
-    
+    }}
+
     .stTextInput > div > div > input::placeholder,
-    .stTextArea > div > div > textarea::placeholder {
-        color: #6B7280;
-    }
-    
+    .stTextArea > div > div > textarea::placeholder {{
+        color: {c['muted2']};
+    }}
+
     /* Tab styling - clean underline style */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid {c['border']};
         background-color: transparent;
         padding: 0;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
+    }}
+
+    .stTabs [data-baseweb="tab"] {{
         background-color: transparent;
-        color: #6B7280;
+        color: {c['muted2']};
         border-radius: 0;
         padding: 1rem 1.5rem;
         font-weight: 500;
         font-size: 0.95rem;
         transition: all 0.2s ease;
         border-bottom: 2px solid transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+    }}
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
         color: #10B981;
         border-bottom: 2px solid #10B981;
         background-color: transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #9CA3AF;
-    }
-    
+    }}
+
+    .stTabs [data-baseweb="tab"]:hover {{
+        color: {c['muted']};
+    }}
+
     /* Success and error messages - clean */
-    .stSuccess {
+    .stSuccess {{
         background-color: rgba(16, 185, 129, 0.1);
         border: 1px solid rgba(16, 185, 129, 0.3);
         border-radius: 8px;
         padding: 1rem;
         color: #10B981;
-    }
-    
-    .stError {
+    }}
+
+    .stError {{
         background-color: rgba(239, 68, 68, 0.1);
         border: 1px solid rgba(239, 68, 68, 0.3);
         border-radius: 8px;
         padding: 1rem;
         color: #EF4444;
-    }
-    
-    .stInfo {
+    }}
+
+    .stInfo {{
         background-color: rgba(245, 158, 11, 0.1);
         border: 1px solid rgba(245, 158, 11, 0.3);
         border-radius: 8px;
         padding: 1rem;
         color: #F59E0B;
-    }
-    
-    /* Metric cards - clean dark theme */
-    [data-testid="stMetricValue"] {
+    }}
+
+    /* Metric cards - clean theme */
+    [data-testid="stMetricValue"] {{
         font-size: 2rem;
         font-weight: 700;
-        color: #FFFFFF;
-    }
-    
-    [data-testid="stMetricDelta"] {
+        color: {c['heading']};
+    }}
+
+    [data-testid="stMetricDelta"] {{
         font-size: 0.9rem;
         font-weight: 500;
-    }
-    
+    }}
+
     /* Progress bar - emerald accent */
-    .stProgress > div > div > div {
+    .stProgress > div > div > div {{
         background-color: #10B981;
-    }
-    
-    /* File uploader - clean dark theme */
-    .stFileUploader {
-        border: 2px dashed rgba(255, 255, 255, 0.15);
+    }}
+
+    /* File uploader - clean theme */
+    .stFileUploader {{
+        border: 2px dashed {c['border_strong']};
         border-radius: 12px;
         padding: 2rem;
-        background-color: #1A1D27;
+        background-color: {c['card_bg']};
         transition: all 0.2s ease;
-    }
-    
-    .stFileUploader:hover {
-        border-color: rgba(16, 185, 129, 0.3);
-    }
-    
-    /* Camera input - match dark theme and emerald accent */
-    [data-testid="stCameraInput"] {
-        background-color: #1A1D27;
+    }}
+
+    .stFileUploader:hover {{
+        border-color: rgba(16, 185, 129, 0.4);
+    }}
+
+    /* Camera input - match theme and emerald accent */
+    [data-testid="stCameraInput"] {{
+        background-color: {c['card_bg']};
         border: 1px solid rgba(16, 185, 129, 0.35);
         border-radius: 12px;
         padding: 0.75rem;
-    }
-    
-    /* Sidebar - clean dark theme */
-    .css-1d391kg {
-        background-color: #1A1D27;
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    
+    }}
+
+    /* Sidebar - clean theme */
+    section[data-testid="stSidebar"] {{
+        background-color: {c['card_bg']};
+        border-right: 1px solid {c['border']};
+    }}
+
     /* Dataframe styling */
-    .stDataFrame {
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+    .stDataFrame {{
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 8px;
-    }
-    
+    }}
+
     /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+    .streamlit-expanderHeader {{
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 8px;
-        color: #E2E8F0;
-    }
-    
+        color: {c['text']};
+    }}
+
     /* Radio button styling */
-    .stRadio > div {
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+    .stRadio > div {{
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 8px;
         padding: 1rem;
-    }
-    
+    }}
+
     /* Form styling */
-    .stForm {
-        background-color: #1A1D27;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+    .stForm {{
+        background-color: {c['card_bg']};
+        border: 1px solid {c['border']};
         border-radius: 12px;
         padding: 1.5rem;
-    }
-    
+    }}
+
+    /* Headings and markdown text follow theme */
+    h1, h2, h3, h4, h5, h6 {{
+        color: {c['heading']} !important;
+    }}
+
     /* Responsive design */
-    @media (max-width: 768px) {
-        .hero-headline {
+    @media (max-width: 768px) {{
+        .hero-headline {{
             font-size: 2.5rem;
-        }
-        
-        .custom-header {
+        }}
+
+        .custom-header {{
             flex-direction: column;
             text-align: center;
             gap: 1rem;
-        }
-        
-        .stat-value {
+        }}
+
+        .stat-value {{
             font-size: 2rem;
-        }
-        
-        .field-check {
+        }}
+
+        .field-check {{
             font-size: 0.95rem;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
+        }}
+
+        .stTabs [data-baseweb="tab"] {{
             padding: 0.75rem 1rem;
             font-size: 0.85rem;
-        }
-    }
+        }}
+    }}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+# Initialize theme in session state before first CSS render
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'dark'
+
+st.markdown(get_theme_css(st.session_state.theme), unsafe_allow_html=True)
 
 # Initialize session state for scan history
 if 'scan_history' not in st.session_state:
@@ -662,7 +712,10 @@ def manual_entry_tab():
         
         with col1:
             product_name = st.text_input("Product Name*", value=demo_data.get('product_name', ''), placeholder="e.g., Organic Honey")
-            category = st.selectbox("Category*", ["Food", "Cosmetic", "Household", "Electronics", "Textile", "Other"])
+            category_options = ["Food", "Cosmetic", "Household", "Electronics", "Textile", "Other"]
+            demo_category = demo_data.get('category', 'Food')
+            default_category_index = category_options.index(demo_category) if demo_category in category_options else 0
+            category = st.selectbox("Category*", category_options, index=default_category_index)
         
         with col2:
             manufacturer_name = st.text_input("Manufacturer Name*", value=demo_data.get('manufacturer_name', ''), placeholder="e.g., Organic Foods Ltd")
@@ -681,6 +734,7 @@ def manual_entry_tab():
         
         with col4:
             country_of_origin = st.text_input("Country of Origin*", value=demo_data.get('country_of_origin', ''), placeholder="e.g., India")
+            fssai_license = st.text_input("FSSAI License Number", value=demo_data.get('fssai_license', ''), placeholder="e.g., 10012345678901 (14-digit number)", help="Required for Food products")
         
         st.markdown("---")
         
@@ -721,8 +775,17 @@ def manual_entry_tab():
             if 'demo_data' in st.session_state:
                 del st.session_state.demo_data
             
-            # Combine all text for compliance checking
-            all_text = f"{product_name} {manufacturer_name} {manufacturer_address} {net_quantity} {mrp} {unit_sale_price} {mfg_date} {expiry_date} {customer_care} {country_of_origin} {batch_number}"
+            # Validate FSSAI for Food category
+            if category == "Food" and not fssai_license:
+                st.error("❌ FSSAI License Number is required for Food products")
+                return
+            
+            # Combine all text for compliance checking with proper field labels
+            all_text = f"{product_name} {manufacturer_name} {manufacturer_address} Net Weight: {net_quantity} MRP: {mrp} Unit Sale Price: {unit_sale_price} MFG: {mfg_date} Expiry Date: {expiry_date} Customer Care: {customer_care} Country of Origin: {country_of_origin} {batch_number}"
+            
+            # Add FSSAI license if provided
+            if fssai_license:
+                all_text += f" FSSAI License: {fssai_license}"
             
             result = check_compliance(all_text, category)
             
@@ -1383,29 +1446,32 @@ def scan_history_tab():
             st.rerun()
 
 def load_demo_product():
-    """Load demo product data for testing"""
+    """Load demo product data for testing - FULLY COMPLIANT PRODUCT"""
     demo_data = {
-        'product_name': 'Demo Organic Honey',
+        'product_name': 'Organic Basmati Rice',
         'category': 'Food',
-        'manufacturer_name': 'Organic Foods Ltd',
-        'manufacturer_address': '123 Food Street, Mumbai, India',
-        'net_quantity': '500g',
-        'mrp': '₹299',
-        'unit_sale_price': '₹299',
-        'mfg_date': '01/01/2024',
-        'expiry_date': '01/01/2026',
+        'manufacturer_name': 'Organic Foods Pvt Ltd',
+        'manufacturer_address': 'F-123, Industrial Area, Phase 2, New Delhi - 110020, India',
+        'net_quantity': '1 kg',
+        'mrp': 'Rs.250',
+        'unit_sale_price': 'Rs.250/kg',
+        'mfg_date': '15/01/2024',
+        'expiry_date': '15/01/2026',
         'customer_care': '1800-123-4567',
         'country_of_origin': 'India',
-        'batch_number': 'BATCH12345'
+        'batch_number': 'BATCH12345',
+        'fssai_license': '10012345678901'
     }
     return demo_data
 
 # Main application
 def main():
-    # Custom Header/Navbar
-    st.markdown("""
-    <div class='custom-header'>
-        <div style='display: flex; align-items: center; gap: 1rem;'>
+    # Custom Header/Navbar with a FUNCTIONAL dark/light toggle
+    header_left, header_right = st.columns([6, 1])
+
+    with header_left:
+        st.markdown("""
+        <div style='display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0;'>
             <div class='logo-badge'>
                 <svg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'>
                     <path d='M16 3 L27 7 V15 C27 22 22 27 16 29 C10 27 5 22 5 15 V7 Z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/>
@@ -1417,9 +1483,17 @@ def main():
                 <div class='app-subtitle'>COMPLIANCE SCANNER</div>
             </div>
         </div>
-        <div class='theme-toggle'>🌙</div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+
+    with header_right:
+        st.markdown("<div style='padding-top: 1.1rem;'></div>", unsafe_allow_html=True)
+        current_theme = st.session_state.get('theme', 'dark')
+        toggle_icon = "☀️ Light" if current_theme == "dark" else "🌙 Dark"
+        if st.button(toggle_icon, key="theme_toggle_btn"):
+            st.session_state.theme = "light" if current_theme == "dark" else "dark"
+            st.rerun()
+
+    st.markdown("<div style='border-bottom: 1px solid rgba(128,128,128,0.15); margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
     
     # Hero Section
     st.markdown("""

@@ -52,7 +52,7 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
         prompt = """
         Analyze this product label image for compliance with India's Legal Metrology (Packaged Commodities) Rules, 2011.
         
-        Identify and extract the following 8 mandatory fields:
+        Identify and extract the following mandatory fields:
         1. MRP (Maximum Retail Price)
         2. Net Quantity
         3. Manufacturing Date
@@ -61,6 +61,9 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
         6. Manufacturer Address
         7. Unit Sale Price
         8. Country of Origin
+        
+        For food products, also identify:
+        9. FSSAI License Number (14-digit number)
         
         For each field, provide:
         - Whether it's present (true/false)
@@ -77,6 +80,7 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
             "Manufacturer Address": {"present": true/false, "value": "extracted text or null", "confidence": 0-100},
             "Unit Sale Price": {"present": true/false, "value": "extracted text or null", "confidence": 0-100},
             "Country of Origin": {"present": true/false, "value": "extracted text or null", "confidence": 0-100},
+            "FSSAI License Number": {"present": true/false, "value": "extracted text or null", "confidence": 0-100},
             "overall_compliant": true/false,
             "score": "X/8"
         }
@@ -118,7 +122,7 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
         
         # Validate the result structure
         required_fields = ["MRP", "Net Quantity", "Manufacturing Date", "Expiry/Best Before Date", 
-                          "Customer Care Number", "Manufacturer Address", "Unit Sale Price", "Country of Origin"]
+                          "Customer Care Number", "Manufacturer Address", "Unit Sale Price", "Country of Origin", "FSSAI License Number"]
         
         # Handle different possible response structures
         fields_data = {}
@@ -144,14 +148,19 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
                 if "confidence" not in fields_data[field]:
                     fields_data[field]["confidence"] = 0
         
-        # Calculate score if not provided
+        # Calculate score if not provided (base 8 fields, FSSAI is extra)
         if "score" not in result:
-            present_count = sum(1 for field in required_fields if fields_data[field].get("present", False))
+            # Count only the 8 mandatory fields for score
+            mandatory_fields = ["MRP", "Net Quantity", "Manufacturing Date", "Expiry/Best Before Date", 
+                              "Customer Care Number", "Manufacturer Address", "Unit Sale Price", "Country of Origin"]
+            present_count = sum(1 for field in mandatory_fields if fields_data[field].get("present", False))
             result["score"] = f"{present_count}/8"
         
-        # Calculate overall compliance if not provided
+        # Calculate overall compliance if not provided (based on 8 mandatory fields)
         if "overall_compliant" not in result:
-            result["overall_compliant"] = all(fields_data[field].get("present", False) for field in required_fields)
+            mandatory_fields = ["MRP", "Net Quantity", "Manufacturing Date", "Expiry/Best Before Date", 
+                              "Customer Care Number", "Manufacturer Address", "Unit Sale Price", "Country of Origin"]
+            result["overall_compliant"] = all(fields_data[field].get("present", False) for field in mandatory_fields)
         
         # Restructure to match expected format
         final_result = {

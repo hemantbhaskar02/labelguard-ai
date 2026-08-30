@@ -28,7 +28,10 @@ def check_compliance(text, category="Other"):
         'MRP': [
             r'MRP\s*[:\s]*\₹?\s*\d+\.?\d*',
             r'MAXIMUM\s+RETAIL\s+PRICE\s*[:\s]*\₹?\s*\d+\.?\d*',
-            r'M\.R\.P\.?\s*[:\s]*\₹?\s*\d+\.?\d*'
+            r'M\.R\.P\.?\s*[:\s]*\₹?\s*\d+\.?\d*',
+            r'MRP\s*[:\s]*Rs\.?\s*\d+\.?\d*',
+            r'MAXIMUM\s+RETAIL\s+PRICE\s*[:\s]*Rs\.?\s*\d+\.?\d*',
+            r'M\.R\.P\.?\s*[:\s]*Rs\.?\s*\d+\.?\d*'
         ],
         'Net Quantity': [
             r'NET\s+WEIGHT\s*[:\s]*\d+\.?\d*\s*(?:g|kg|ml|l|L|G|KG)',
@@ -48,14 +51,17 @@ def check_compliance(text, category="Other"):
             r'EXPIRY\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',
             r'EXPIRY\s+DATE\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',
             r'BEST\s+BEFORE\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',
-            r'USE\s+BY\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}'
+            r'USE\s+BY\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',
+            r'EXPIRY\s*[:\s]*\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}'
         ],
         'Customer Care Number': [
             r'CUSTOMER\s+CARE\s*[:\s]*\+?\d{10,15}',
             r'CUSTOMER\s+SERVICE\s*[:\s]*\+?\d{10,15}',
             r'HELPLINE\s*[:\s]*\+?\d{10,15}',
-            r'TOLL\s+FREE\s*[:\s]*\+?\d{10,15}',
-            r'CONTACT\s*[:\s]*\+?\d{10,15}'
+            r'CONTACT\s*[:\s]*\+?\d{10,15}',
+            r'CARE\s*[:\s]*\+?\d{10,15}',
+            r'1800-\d{7}',
+            r'\d{10,15}'
         ],
         'Manufacturer Address': [
             r'MANUFACTURED\s+BY\s*[:\s]*.+(?:street|road|city|state|india|IN)',
@@ -69,7 +75,11 @@ def check_compliance(text, category="Other"):
             r'UNIT\s+SALE\s+PRICE\s*[:\s]*\₹?\s*\d+\.?\d*',
             r'UNIT\s+PRICE\s*[:\s]*\₹?\s*\d+\.?\d*',
             r'SALE\s+PRICE\s*[:\s]*\₹?\s*\d+\.?\d*',
-            r'PRICE\s*[:\s]*\₹?\s*\d+\.?\d*'
+            r'PRICE\s*[:\s]*\₹?\s*\d+\.?\d*',
+            r'UNIT\s+SALE\s+PRICE\s*[:\s]*Rs\.?\s*\d+\.?\d*',
+            r'UNIT\s+PRICE\s*[:\s]*Rs\.?\s*\d+\.?\d*',
+            r'SALE\s+PRICE\s*[:\s]*Rs\.?\s*\d+\.?\d*',
+            r'PRICE\s*[:\s]*Rs\.?\s*\d+\.?\d*'
         ],
         'Country of Origin': [
             r'COUNTRY\s+OF\s+ORIGIN\s*[:\s]*\w+',

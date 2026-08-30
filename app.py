@@ -943,12 +943,42 @@ def process_qr_image_file(image_file, method, preview_caption, data_key, categor
     try:
         image = Image.open(image_file)
         st.image(image, caption=preview_caption, width=450)
-        decoded_objects = pyzbar.decode(image)
+
+        # pyzbar can fail to extract data (while still "detecting" a QR
+        # shape) on images that aren't plain RGB - camera captures are
+        # often RGBA, and some are palette-based. Normalize to RGB first,
+        # then try decoding; if that yields nothing, retry against a
+        # grayscale + upscaled version, which is more robust for QR codes
+        # that are small, low-contrast, or photographed at an angle.
+        normalized = image.convert("RGB")
+        decoded_objects = pyzbar.decode(normalized)
+
         if not decoded_objects:
-            st.error("❌ No QR code detected in the image. Please try a clearer image.")
+            width, height = normalized.size
+            upscale_factor = 2 if max(width, height) < 800 else 1
+            retry_img = normalized
+            if upscale_factor > 1:
+                retry_img = normalized.resize(
+                    (width * upscale_factor, height * upscale_factor),
+                    Image.LANCZOS,
+                )
+            grayscale_retry = retry_img.convert("L")
+            decoded_objects = pyzbar.decode(grayscale_retry)
+
+        if not decoded_objects:
+            st.error("❌ No QR code detected in the image. Please try a clearer, well-lit, closer image of the QR code.")
             return
+
         for obj in decoded_objects:
-            qr_data = obj.data.decode('utf-8')
+            try:
+                qr_data = obj.data.decode('utf-8')
+            except UnicodeDecodeError:
+                qr_data = obj.data.decode('utf-8', errors='replace')
+
+            if not qr_data:
+                st.warning("⚠️ A QR code was detected, but it appears to be empty or unreadable. Please try a clearer image.")
+                continue
+
             st.success("✅ QR Code detected!")
             st.text_area("QR Code Data", qr_data, height=150, key=data_key)
             category = st.selectbox(
@@ -1222,8 +1252,6 @@ def qr_scanner_tab():
                 category_key="qr_camera_category",
                 button_key="qr_camera_check",
             )
-            if st.button("📷 Capture Another Image", key="qr_camera_recapture"):
-                st.rerun()
 
 def bulk_scan_tab():
     """Bulk/Batch upload mode for multiple images"""

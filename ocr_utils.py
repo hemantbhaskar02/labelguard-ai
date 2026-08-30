@@ -3,21 +3,41 @@ import numpy as np
 import easyocr
 from PIL import Image
 import logging
+import streamlit as st
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@st.cache_resource(show_spinner="Loading OCR engine (first time only)...")
+def get_ocr_reader():
+    """
+    Create the EasyOCR reader ONCE and cache it for the lifetime of the app.
+    Without this, a brand-new reader (and its model files) was being loaded
+    on every single scan, which is why scans were taking minutes and
+    sometimes crashing the app on Streamlit Cloud's limited free-tier memory.
+    """
+    return easyocr.Reader(['en'], gpu=False)
+
 def preprocess_image(image_path):
     """
     Preprocess image to improve OCR accuracy.
-    Steps: grayscale, denoising, contrast enhancement
+    Steps: downscale (for speed), grayscale, denoising, contrast enhancement
     """
     try:
         # Read image
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image from {image_path}")
-        
+
+        # Downscale large images - this drastically speeds up OCR on CPU
+        # without hurting accuracy (label text stays readable well below
+        # typical phone-camera resolutions).
+        max_dimension = 1200
+        h, w = img.shape[:2]
+        if max(h, w) > max_dimension:
+            scale = max_dimension / max(h, w)
+            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
@@ -51,9 +71,9 @@ def extract_text(image_path):
     try:
         # Preprocess the image
         processed_img = preprocess_image(image_path)
-        
-        # Initialize EasyOCR reader
-        reader = easyocr.Reader(['en'], gpu=False)
+
+        # Get the cached reader instead of creating a new one every call
+        reader = get_ocr_reader()
         
         # Extract text
         results = reader.readtext(processed_img)

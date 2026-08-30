@@ -41,12 +41,32 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
         # Configure Gemini API
         genai.configure(api_key=api_key)
         
-        # Use a current vision-capable Gemini model
-        model = genai.GenerativeModel('gemini-3.6-flash')
+        # Use a vision-capable Gemini model with a much higher free-tier
+        # daily quota. gemini-3.6-flash is newer but its free tier is
+        # capped at only ~20 requests/day, which gets exhausted almost
+        # immediately during testing. gemini-2.5-flash offers a far more
+        # generous free-tier daily limit, which is what a hackathon demo
+        # actually needs.
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # Read and encode image
-        with open(image_path, 'rb') as image_file:
-            image_data = image_file.read()
+        # Read and downscale the image before sending — a smaller upload
+        # means a noticeably faster round-trip without hurting label
+        # readability, since label text stays clear well below typical
+        # phone-camera resolutions.
+        from PIL import Image
+        import io as _io
+
+        img = Image.open(image_path)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        max_dimension = 1400
+        if max(img.size) > max_dimension:
+            scale = max_dimension / max(img.size)
+            new_size = (int(img.size[0] * scale), int(img.size[1] * scale))
+            img = img.resize(new_size, Image.LANCZOS)
+        buffer = _io.BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        image_data = buffer.getvalue()
         
         # Create the prompt for Gemini
         prompt = """
@@ -94,8 +114,12 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
             "data": base64.b64encode(image_data).decode()
         }
         
-        # Generate content
-        response = model.generate_content([prompt, image_part])
+        # Generate content (with a timeout so a slow/hung request fails
+        # gracefully instead of appearing frozen forever in the UI)
+        response = model.generate_content(
+            [prompt, image_part],
+            request_options={"timeout": 45}
+        )
         
         # Parse the response
         response_text = response.text

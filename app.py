@@ -25,9 +25,11 @@ from compliance_check import check_compliance
 try:
     from pyzbar import pyzbar
     QR_AVAILABLE = True
-except ImportError:
+    QR_IMPORT_ERROR = None
+except ImportError as _qr_err:
     QR_AVAILABLE = False
     pyzbar = None
+    QR_IMPORT_ERROR = str(_qr_err)
 
 try:
     from gemini_vision_check import check_compliance_with_gemini
@@ -62,7 +64,7 @@ THEMES = {
     },
     "light": {
         "app_bg": "#F7F8FA", "card_bg": "#FFFFFF", "text": "#1F2937",
-        "heading": "#0F1117", "muted": "#4B5563", "muted2": "#6B7280",
+        "heading": "#0F1117", "muted": "#374151", "muted2": "#4B5563",
         "border": "rgba(15, 17, 23, 0.08)", "border_strong": "rgba(15, 17, 23, 0.15)",
         "shadow": "rgba(15, 17, 23, 0.08)", "input_bg": "#F7F8FA",
     },
@@ -481,7 +483,8 @@ def get_theme_css(theme_name):
 
     .stTabs [data-baseweb="tab"] {{
         background-color: transparent;
-        color: {c['muted2']};
+        color: {c['muted2']} !important;
+        opacity: 1 !important;
         border-radius: 0;
         padding: 1rem 1.5rem;
         font-weight: 500;
@@ -490,14 +493,27 @@ def get_theme_css(theme_name):
         border-bottom: 2px solid transparent;
     }}
 
+    .stTabs [data-baseweb="tab"] p {{
+        color: {c['muted2']} !important;
+        opacity: 1 !important;
+    }}
+
     .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-        color: #10B981;
+        color: #10B981 !important;
         border-bottom: 2px solid #10B981;
         background-color: transparent;
     }}
 
+    .stTabs [data-baseweb="tab"][aria-selected="true"] p {{
+        color: #10B981 !important;
+    }}
+
     .stTabs [data-baseweb="tab"]:hover {{
-        color: {c['muted']};
+        color: {c['heading']} !important;
+    }}
+
+    .stTabs [data-baseweb="tab"]:hover p {{
+        color: {c['heading']} !important;
     }}
 
     /* Success and error messages - clean */
@@ -1099,67 +1115,32 @@ def photo_ocr_tab():
                 with st.spinner("🔄 Processing image and checking compliance..."):
                     try:
                         if mode == "Fast Mode (Offline)":
-                            # Use EasyOCR
+                            # Use EasyOCR, then stash the extracted text in
+                            # session_state so the review/edit step below
+                            # survives the next rerun (a button nested
+                            # inside another button's if-block disappears
+                            # on the next click - that was the original bug).
                             extracted_text = extract_text(temp_path)
-                            
-                            # Show extracted text for review
-                            st.markdown("---")
-                            st.markdown('<div class="step-indicator">STEP 03: Review Extracted Text</div>', unsafe_allow_html=True)
-                            
-                            st.markdown("""
-                            <div class='info-card'>
-                                <div style='font-weight: 600; color: var(--lg-heading); margin-bottom: 0.5rem;'>✏️ Review and Edit OCR Results</div>
-                                <div style='color: var(--lg-muted); font-size: 0.85rem;'>Edit the extracted text if needed before checking compliance</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            edited_text = st.text_area("OCR Extracted Text", extracted_text, height=200, key="fast_ocr_text")
-                            
-                            col_left, col_center, col_right = st.columns([1, 2, 1])
-                            with col_center:
-                                if st.button("✅ Check Compliance with Edited Text", use_container_width=True):
-                                    result = check_compliance(edited_text, category)
-                                    
-                                    st.markdown("---")
-                                    st.markdown('<div class="step-indicator">STEP 04: Compliance Results</div>', unsafe_allow_html=True)
-                                    display_compliance_result(result)
-                                    
-                                    # Add to history
-                                    add_to_history(
-                                        result,
-                                        method="Fast OCR",
-                                        product_name="Camera Photo" if image_source == "Take Photo" else "Uploaded Image",
-                                    )
-                        
+                            st.session_state['photo_ocr_stage'] = 'review_fast'
+                            st.session_state['photo_ocr_extracted_text'] = extracted_text
+                            st.session_state['photo_ocr_image_source'] = image_source
+                            st.session_state['photo_ocr_category'] = category
+
                         else:  # Accurate Mode with Gemini
                             if not GEMINI_AVAILABLE:
                                 st.error("⚠️ Gemini AI features require 'google-generativeai' package")
                                 st.info("💡 Install it using: pip install google-generativeai")
-                                # Fall back to OCR
+                                # Fall back to OCR - same session_state pattern
                                 extracted_text = extract_text(temp_path)
-                                st.markdown("---")
-                                st.markdown('<div class="step-indicator">STEP 03: Review Extracted Text</div>', unsafe_allow_html=True)
-                                edited_text = st.text_area("OCR Extracted Text", extracted_text, height=200, key="fallback_ocr_text")
-                                
-                                col_left, col_center, col_right = st.columns([1, 2, 1])
-                                with col_center:
-                                    if st.button("✅ Check Compliance with Edited Text", use_container_width=True):
-                                        result = check_compliance(edited_text, category)
-                                        
-                                        st.markdown("---")
-                                        st.markdown('<div class="step-indicator">STEP 04: Compliance Results</div>', unsafe_allow_html=True)
-                                        display_compliance_result(result)
-                                        
-                                        # Add to history
-                                        add_to_history(
-                                            result,
-                                            method="Fast OCR (Fallback)",
-                                            product_name="Camera Photo" if image_source == "Take Photo" else "Uploaded Image",
-                                        )
+                                st.session_state['photo_ocr_stage'] = 'review_fallback'
+                                st.session_state['photo_ocr_extracted_text'] = extracted_text
+                                st.session_state['photo_ocr_image_source'] = image_source
+                                st.session_state['photo_ocr_category'] = category
                             else:
-                                # Use Gemini AI
+                                # Use Gemini AI - single-shot, no review stage needed
+                                st.session_state['photo_ocr_stage'] = None
                                 result = check_compliance_with_gemini(temp_path)
-                                
+
                                 if "error" in result and result["error"]:
                                     st.error(result["error"])
                                     st.info("💡 Try switching to Fast Mode or Manual Entry if the issue persists.")
@@ -1167,28 +1148,70 @@ def photo_ocr_tab():
                                     st.markdown("---")
                                     st.markdown('<div class="step-indicator">STEP 03: Compliance Results</div>', unsafe_allow_html=True)
                                     display_compliance_result(result, show_confidence=True)
-                                    
+
                                     # Add to history
                                     add_to_history(
                                         result,
                                         method="Gemini AI",
                                         product_name="Camera Photo" if image_source == "Take Photo" else "Uploaded Image",
                                     )
-                        
+
                         # Clean up temp file
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
-                            
+
                     except Exception as e:
                         st.error(f"❌ Error processing image: {str(e)}")
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
 
+        # Review/edit stage - rendered OUTSIDE the button's if-block so it
+        # survives across reruns (fixes the "nothing happens on second
+        # click" bug). Active whenever Fast Mode (or the Gemini-unavailable
+        # fallback) has just extracted text and is waiting for review.
+        if st.session_state.get('photo_ocr_stage') in ('review_fast', 'review_fallback'):
+            st.markdown("---")
+            st.markdown('<div class="step-indicator">STEP 03: Review Extracted Text</div>', unsafe_allow_html=True)
+
+            st.markdown("""
+            <div class='info-card'>
+                <div style='font-weight: 600; color: var(--lg-heading); margin-bottom: 0.5rem;'>✏️ Review and Edit OCR Results</div>
+                <div style='color: var(--lg-muted); font-size: 0.85rem;'>Edit the extracted text if needed before checking compliance</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            edited_text = st.text_area(
+                "OCR Extracted Text",
+                st.session_state.get('photo_ocr_extracted_text', ''),
+                height=200,
+                key="fast_ocr_text_review",
+            )
+
+            col_left2, col_center2, col_right2 = st.columns([1, 2, 1])
+            with col_center2:
+                if st.button("✅ Check Compliance with Edited Text", use_container_width=True, key="check_edited_text_btn"):
+                    review_category = st.session_state.get('photo_ocr_category', category)
+                    result = check_compliance(edited_text, review_category)
+
+                    st.markdown("---")
+                    st.markdown('<div class="step-indicator">STEP 04: Compliance Results</div>', unsafe_allow_html=True)
+                    display_compliance_result(result)
+
+                    review_source = st.session_state.get('photo_ocr_image_source')
+                    method_label = "Fast OCR" if st.session_state.get('photo_ocr_stage') == 'review_fast' else "Fast OCR (Fallback)"
+                    add_to_history(
+                        result,
+                        method=method_label,
+                        product_name="Camera Photo" if review_source == "Take Photo" else "Uploaded Image",
+                    )
+
 def qr_scanner_tab():
     """QR code scanner for product label data with camera and upload options"""
     if not QR_AVAILABLE:
         st.error("⚠️ QR scanning features require the 'pyzbar' package. Please install it using: pip install pyzbar")
-        st.info("💡 You can still use Manual Entry or Photo/OCR modes for compliance checking.")
+        if QR_IMPORT_ERROR:
+            st.code(QR_IMPORT_ERROR, language=None)
+        st.info("💡 You can still use Manual Entry or Photo/OCR modes for compliance checking. If this is deployed on Streamlit Cloud, check that packages.txt lists 'libzbar0' and reboot the app.")
         return
     
     st.markdown('<div class="step-indicator">STEP 01: Choose QR Scanning Method</div>', unsafe_allow_html=True)

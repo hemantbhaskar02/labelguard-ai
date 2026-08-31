@@ -2,22 +2,64 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 import base64
+import hashlib
 import logging
 import json
 from typing import Dict, Any
+
+try:
+    import streamlit as st
+    _HAS_STREAMLIT = True
+except ImportError:
+    _HAS_STREAMLIT = False
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
     """
+    Public entry point. Reads the image bytes and delegates to a
+    content-hash-cached implementation so re-scanning the SAME image
+    (e.g. re-testing before a demo) doesn't burn through Gemini's scarce
+    20 requests/day free-tier quota a second time.
+    """
+    try:
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+    except Exception as e:
+        return {
+            "error": f"Could not read image file: {e}",
+            "fields": {},
+            "overall_compliant": False,
+            "score": "0/8",
+        }
+
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+
+    if _HAS_STREAMLIT:
+        return _check_compliance_with_gemini_cached(image_bytes, image_hash)
+    return _check_compliance_with_gemini_impl(image_bytes)
+
+
+if _HAS_STREAMLIT:
+    @st.cache_data(show_spinner=False)
+    def _check_compliance_with_gemini_cached(image_bytes: bytes, image_hash: str) -> Dict[str, Any]:
+        # image_hash is unused inside but is what makes the cache key
+        # correct - image_bytes alone would also work as a key, but
+        # hashing explicitly keeps the cache key small/fast to compare.
+        return _check_compliance_with_gemini_impl(image_bytes)
+
+
+def _check_compliance_with_gemini_impl(image_bytes: bytes) -> Dict[str, Any]:
+    """
     Check compliance using Google Gemini AI vision capabilities.
-    
+
     Args:
-        image_path (str): Path to the product label image
-        
+        image_bytes (bytes): Raw bytes of the product label image
+
     Returns:
         dict: Dictionary containing:
             - fields: dict with field names and their presence, value, and confidence
@@ -41,22 +83,22 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
         # Configure Gemini API
         genai.configure(api_key=api_key)
         
-        # Use a vision-capable Gemini model with a much higher free-tier
-        # daily quota. gemini-3.6-flash is newer but its free tier is
-        # capped at only ~20 requests/day, which gets exhausted almost
-        # immediately during testing. gemini-2.5-flash offers a far more
-        # generous free-tier daily limit, which is what a hackathon demo
-        # actually needs.
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # NOTE: this Google account/project can only access gemini-3.6-flash
+        # (gemini-2.5-flash returns a 404 "no longer available to new users"
+        # error on this account). gemini-3.6-flash's free tier is capped at
+        # a low 20 requests/day - the content-hash caching above avoids
+        # burning through that quota on repeated identical scans, but be
+        # mindful of total unique scans before a live demo.
+        model = genai.GenerativeModel('gemini-3.6-flash')
         
-        # Read and downscale the image before sending — a smaller upload
-        # means a noticeably faster round-trip without hurting label
-        # readability, since label text stays clear well below typical
-        # phone-camera resolutions.
+        # Downscale the image before sending — a smaller upload means a
+        # noticeably faster round-trip without hurting label readability,
+        # since label text stays clear well below typical phone-camera
+        # resolutions.
         from PIL import Image
         import io as _io
 
-        img = Image.open(image_path)
+        img = Image.open(_io.BytesIO(image_bytes))
         if img.mode != "RGB":
             img = img.convert("RGB")
         max_dimension = 1400
@@ -207,3 +249,4 @@ def check_compliance_with_gemini(image_path: str) -> Dict[str, Any]:
             "overall_compliant": False,
             "score": "0/8"
         }
+
